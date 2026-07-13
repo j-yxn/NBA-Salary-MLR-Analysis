@@ -1,0 +1,320 @@
+---
+title: "Determinants of NBA Player Salaries"
+subtitle: "Multiple Linear Regression Analysis"
+author: "Daniel Yoon"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: hide
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  warning = FALSE, 
+  message = FALSE, 
+  fig.align = 'center',
+  fig.width = 10,
+  fig.height = 7
+)
+```
+
+```{r, echo=FALSE, warning=FALSE,results=FALSE}
+install.packages("caret", repos = "https://cloud.r-project.org")
+install.packages("kableExtra", repos = "https://cloud.r-project.org")
+install.packages("tidyverse", repos = "https://cloud.r-project.org")
+install.packages("DT", repos = "https://cloud.r-project.org")
+install.packages("modelsummary", repos = "https://cloud.r-project.org")
+install.packages("patchwork", repos = "https://cloud.r-project.org")
+library(caret)
+library(olsrr)
+library(car)
+library(MASS)
+library(knitr)
+library(kableExtra)
+library(tidyverse)
+library(DT)        
+library(modelsummary) 
+library(patchwork)
+```
+
+```{r}
+# Read in the data
+playerdata1 <-read.csv("https://raw.githubusercontent.com/Aadi-Shah10/Stat-Project/refs/heads/main/NBA%20Player%20Data%2024-25%20-%20Sheet3.csv", header=T)
+playerdata <- filter(playerdata1, !is.na(SALARY))
+```
+
+\newpage
+
+## Introduction
+
+NBA player salaries are determined by a nuanced combination of on-court performance, market factors, and individual recognition. This analysis implements multiple linear regression on a dataset of NBA players compiled from ESPN, the official NBA database, HoopsHype, and Nielsen DMA rankings from the 2024-2025 regular season. The finances of professional basketball represent one of the most compelling intersections of athletic performance and market workings in modern sports. Over the past two decades, NBA salaries have grown exponentially, with the league’s total salary market surpassing \$4 billion annually. However, many factors relate to the player, team, and even luck that drive individual compensation, and are not fully understood by the general public. Understanding what actually predicts player salaries has meaningful implications for not only team front offices but also the players themselves. From basic intuition, the “best players” would earn the most money, but salaries in the NBA are shaped not only by what the player does on the court, but also by where they play and what recognition they have accumulated.
+
+**Core Research Questions:**
+
+***Question 1: Do NBA players with higher points per game from the last season have larger salaries?***
+
+*Scoring is one of the most visible measures of individual performance. Teams tend to have stronger incentives for players who score more, as offense translates to greater chances of winning.*
+
+***Question 2: Do NBA players with a larger team area market size have larger salaries?***
+
+*The NBA spans vastly different media markets. A team in a larger market generates more exposure and revenue, theoretically providing a stronger financial incentive for better players.*
+
+***Question 3: Do NBA players who received awards have larger salaries?***
+
+*Awards such as All-NBA selections and MVP recognition indicate a player’s elevated status, potentially driving higher market demand.*
+
+## Data Summary
+
+**Metadata Description**
+
+The data for this analysis were compiled from publicly available primary sources, including ESPN, the official NBA database, HoopsHype, and Nielsen DMA rankings. Player performance statistics (e.g., Points Per Game, Minutes Per Game, and Player Efficiency Rating) are officially tracked and verified by the NBA. Salary information was compiled from ESPN. Market area classifications utilize Nielsen Designated Market Area (DMA) rankings.
+
+*Disclaimer: While on-court statistics are highly reliable, base salaries listed may omit undisclosed bonuses, and DMA rankings are statistical estimates.*
+
+## EDA Highlights
+
+-   **Skewness & Transformation:** The response variable, Salary, was severely right-skewed, violating MLR assumptions. We applied a logarithmic transformation to create $\log(\text{SALARY})$ to stabilize variance.
+
+-   **Multicollinearity:** A correlation matrix revealed a strong positive correlation between Minutes Per Game (MPG) and Points Per Game (PPG). To avoid multicollinearity, we removed MPG (which had the higher VIF) from the analysis.
+
+-   **Initial Correlations:**
+
+    -   **PPG:** Strong positive correlation with salary ($r = 0.759$).
+
+    -   **Awards:** Significant disparity in average salary between award winners (\$24.2M) and non-winners (\$7.5M).
+
+    -   **Market Area:** Negligible difference between big market (\$9.2M) and small market (\$8.7M) average salaries.
+
+## Analysis and Results
+
+To address our research questions, we performed a multiple linear regression analysis. We built our model starting with a full regression including Age, PPG, PER, Position, Coast, Award status, Market Area, and informed interaction terms.
+
+Through a step-by-step elimination process using partial F-tests ($\alpha = 0.05$), we iteratively removed non-significant interaction terms and main effects. Our final, reduced model includes **Age, PPG, Award status, and the interaction between PPG and Award.**
+
+**External Model Validation**
+
+To assess real-world predictive validity, we utilized an 80/20 data-splitting approach via the `caret` package. The model was trained on 80% of the data and tested on the remaining 20% of unseen observations.
+
+**Outlier Analysis**
+
+We examined individual observations to identify potential outliers that should be removed from the model. Observation 259 stood out as a significant outlier based on Cook's Distance and Leverage. However, this observation appeared less problematic when evaluated using studentized residuals and deleted studentized residuals.
+
+**Decision to Keep Observation 259**
+
+We compared model performance with and without observation 259 and found that both models had identical adjusted R² values and were statistically significant. Removing the observation provided no improvement in model performance. We retained observation 259 in the final model since removing it offered no benefit and we prioritize maximizing sample size when possible.
+
+## Conclusions
+
+The final multiple linear regression model suggests that NBA player salary is heavily dictated by a combination of player performance and individual recognition. The model explains approximately **52%** of the variation in log-transformed NBA salaries, demonstrating moderate predictive strength ($F\text{-statistic} = 154, p < 0.05$).
+
+**Key Takeaways answering our Research Questions:**
+
+1.  **The Scoring Premium:** PPG is a dominant predictor. For players without an award, a one-point increase in PPG is associated with an estimated $0.167$ increase in $\log(\text{SALARY})$, holding other variables constant.
+
+2.  **The Market Size Myth:** Team market area did not have a statistically significant effect on salary after accounting for performance variables. The data rejects the assumption that large-market players automatically earn higher baseline salaries.
+
+3.  **The Award Multiplier:** Award status significantly elevates salary, and the significant $\text{PPG} \times \text{AWARD}$ interaction proves that the financial value of a player's scoring output scales differently depending on their award recognition.
+
+**Limitations & Future Work:**
+
+While robust, the model cannot account for external financial mechanisms like salary caps, free agency timing, or contract lengths. Additionally, defensive metrics were excluded. Future models could incorporate advanced analytics such as Win Shares or Box Plus-Minus to capture a more holistic view of player value.
+
+\newpage
+
+## Appendix A: Data Dictionary
+
+| Variable Name | Abbreviated Name | Description |
+|:----------------------:|:----------------------:|:----------------------:|
+| Salary | SALARY | Player salary |
+| Age | AGE | Age of player in years |
+| Points Per Game | PPG | Average points made per game |
+| Minutes Per Game | MPG | Average minutes played per game |
+| Player Efficiency Rating | PER | A rating that encapsulates all the player's positive contributions |
+| Player Position | POS | Position played by the player (Base level is Center) |
+| Player Position (PG) | POSPG | Player position is PG |
+| Player Position (SG) | POSSG | Player position is SG |
+| Player Position (SF) | POSSF | Player position is SF |
+| Player Position (PF) | POSPF | Player position is PF |
+| Coast | COAST | Coast of the player's team (Base level is East) |
+| Coast (West) | COASTWest | Team coast is West |
+| Award | AWARD | Player award status (Base level is No) |
+| Award (YES) | AWARDYes | Player did not receive an award. |
+| Market Area | MARKET.AREA | Team market area (Base level is Big) |
+| Market Area (Small) | MARKET.AREASmall | Market area of the team is small. |
+
+\newpage
+
+## Appendix B: Data Rows
+
+```{r, echo=FALSE}
+datatable(playerdata, options = list(pageLength = 4, scrollX = TRUE, dom = 'Bftp', style="stripe"), caption = "NBA Player Dataset")
+```
+
+\newpage
+
+## Appendix C: Exploratory Data Analysis
+
+```{r, echo=FALSE}
+playerdata$logSALARY <- log(playerdata$SALARY)
+
+theme_hoops <- function() {
+  theme_minimal(base_family = "sans") +
+    theme(
+      plot.title = element_text(face = "bold", size = 12, color = "#1D428A"), 
+      plot.subtitle = element_text(size = 10, color = "gray40"),
+      axis.title = element_text(face = "bold", size = 10),
+      panel.grid.minor = element_blank(),
+      legend.position = "none" # Suppress individual legends for cleaner grid
+    )
+}
+
+# 1. Histogram of SALARY
+p1 <- ggplot(playerdata, aes(x = SALARY)) +
+  geom_histogram(fill = "#1D428A", color = "white", bins = 30) +
+  scale_x_continuous(labels = scales::dollar_format(scale = 1e-6, suffix = "M")) +
+  labs(title = "Histogram of Salary", x = "Salary", y = "Count") +
+  theme_hoops()
+
+# 2. Relates to question 1
+p2 <- ggplot(playerdata, aes(x = PPG, y = logSALARY)) +
+  geom_point(alpha = 0.5, color = "#C8102E") +
+  geom_smooth(method = "lm", color = "black", se = FALSE, linetype = "dashed") +
+  labs(title = "Log(Salary) vs PPG", x = "PPG", y = "Log(Salary)") +
+  theme_hoops()
+
+# 3. Relates to question 2
+p3 <- ggplot(playerdata, aes(x = MARKET.AREA, y = logSALARY, fill = MARKET.AREA)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_viridis_d() +
+  labs(title = "Log(Salary) by Market Area", x = "Market Area", y = "Log(Salary)") +
+  theme_hoops()
+
+# 4. Relates to question 3
+p4 <- ggplot(playerdata, aes(x = AWARD, y = logSALARY, fill = AWARD)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_viridis_d(option = "plasma") +
+  labs(title = "Log(Salary) by Award", x = "Award", y = "Log(Salary)") +
+  theme_hoops()
+
+# 5. Interesting feature
+p5 <- ggplot(playerdata, aes(x = MPG, y = logSALARY)) +
+  geom_point(alpha = 0.5, color = "#C8102E") +
+  geom_smooth(method = "lm", color = "black", se = FALSE, linetype = "dashed") +
+  labs(title = "Log(Salary) vs MPG", x = "MPG", y = "Log(Salary)") +
+  theme_hoops()
+
+# 6. Interaction Plot
+p6 <- ggplot(playerdata, aes(x = AWARD, y = logSALARY, color = POS, group = POS)) +
+  stat_summary(fun = mean, geom = "point", size = 3) +
+  stat_summary(fun = mean, geom = "line", linewidth = 1) +
+  scale_color_viridis_d(option = "plasma") +
+  labs(
+    title = "Award Status by Position",
+    x = "Award Recognition",
+    y = "Mean Log(Salary)",
+    color = "Position"
+  ) +
+  theme_hoops() + theme(legend.position = "right") # Restore legend for this plot
+
+# Combine via patchwork layout
+(p1 | p2 | p3) / (p4 | p5 | p6)
+```
+
+\newpage
+
+## Appendix D: Final Model Output & Plots
+
+```{r echo=FALSE, warning=FALSE, results=FALSE}
+# Define your models using the pipelined dataset
+playermod <- lm(logSALARY ~ AGE + PPG + PER + POS + COAST + AWARD + MARKET.AREA + AWARD*POS + PPG*AWARD + POS*MARKET.AREA, data = playerdata)
+playermod2 <- lm(logSALARY ~ AGE + PPG + PER + POS + COAST + AWARD + MARKET.AREA + AWARD*POS + PPG*AWARD, data = playerdata)
+playermod3 <- lm(logSALARY ~ AGE + PPG + PER + POS + COAST + AWARD + MARKET.AREA + PPG*AWARD, data = playerdata)
+playermod7 <- lm(logSALARY ~ AGE + PPG + AWARD + PPG*AWARD, data = playerdata)
+
+# Group them into a named list
+model_list <- list(
+  "Full Model" = playermod,
+  "Step 1" = playermod2,
+  "Step 2" = playermod3,
+  "Final Reduced" = playermod7
+)
+
+# Output 
+modelsummary(
+  model_list, 
+  stars = TRUE, 
+  gof_omit = "IC|Log.Lik|F|RMSE", 
+  title = "Iterative Multiple Linear Regression Models Estimating Log(Salary)"
+)
+
+# 1. Interaction Plot for Final Model
+# This re-uses the theme_hoops() function you defined in Appendix C
+ggplot(playerdata, aes(x = PPG, y = logSALARY, color = AWARD)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = TRUE) + # Adds the regression lines and confidence intervals
+  scale_color_viridis_d(option = "plasma") +
+  labs(
+    title = "Final Model Visualization: PPG vs Log(Salary) by Award Status",
+    subtitle = "PPG * AWARD interaction",
+    x = "Points Per Game (PPG)",
+    y = "Log(Salary)",
+    color = "Award Winner"
+  ) + theme_hoops()
+
+# 2. Standard Diagnostic Plots for the Final Reduced Model
+par(mfrow = c(2, 2)) # Set up a 2x2 grid
+plot(playermod7, col = "#1D428A", pch = 16, cex = 0.6) 
+par(mfrow = c(1, 1)) # Reset grid
+```
+
+```{r, echo=FALSE}
+# External Model Validation
+set.seed(123)
+random_sample <- createDataPartition(playerdata$logSALARY, p = 0.8, list = FALSE)
+training_dataset <- playerdata[random_sample, ]
+testing_dataset  <- playerdata[-random_sample, ]
+
+playermod6 <- lm(logSALARY ~ AGE + PPG + PER + COAST + AWARD + PPG*AWARD,
+                     data = training_dataset)
+
+predictions <- predict(playermod6, testing_dataset)
+
+val_df <- data.frame(
+  Metric = c("R-Squared", "RMSE", "MAE"),
+  Value = c(
+    R2(predictions, testing_dataset$logSALARY),
+    RMSE(predictions, testing_dataset$logSALARY),
+    MAE(predictions, testing_dataset$logSALARY)
+  )
+)
+
+kable(val_df, digits = 4, caption = "Table 3: External Validation Metrics (20% Holdout)") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
+```
+
+\newpage
+
+## Appendix E: References
+
+### Background
+
+Academy, U. S. S. (2015, May 29). *Determinants of NBA Player Salaries*. The Sport Journal. <https://thesportjournal.org/article/determinants-of-nba-player-salaries/>
+
+Qian, L. (2024). Influencing Factors of NBA Player’s Salary Based on Mixed Linear Model. *Highlights in Science, Engineering and Technology*, *88*, 260–266. <https://doi.org/10.54097/z9jvqr66>
+
+‌Riccardi, N. R., & Paul, R. (2025). NBA player types and salaries: assessing the disparities in pay. *Managerial Finance*, 1–18. <https://doi.org/10.1108/mf-04-2025-0251>
+
+### Data Sources
+
+*NBA Players Rosters - National Basketball Association - ESPN*. (2025). ESPN.com. <https://www.espn.com/nba/players>
+
+‌National Basketball Association. (2025). *NBA*. Sky Sports; SkySports. <https://www.nba.com/>
+
+‌*Nielsen DMA Rankings 2025*. (2025). Ustvdb.com. <https://ustvdb.com/seasons/2024-25/markets/>
+
+*NBA Team Salaries & Contracts \| HoopsHype*. (2025). HoopsHype. <https://www.hoopshype.com/salaries/teams/>
